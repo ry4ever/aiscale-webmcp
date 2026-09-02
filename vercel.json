@@ -3,11 +3,5 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "vite",
-  "regions": ["iad1"],
-  "routeConfigs": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ]
+  "regions": ["iad1"]
 }
