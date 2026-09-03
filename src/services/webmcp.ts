@@ -401,6 +401,175 @@ export const createFollowUpSequence = {
 }
 
 // ============================================================================
+// WEB MCP TOOL 7: Run Full Campaign (Orchestrates all steps)
+// ============================================================================
+export const runFullCampaign = {
+  name: "run_full_campaign",
+  description: "Execute complete SDR campaign - orchestrates search, enrich, score, generate, send, and follow-up in one call",
+  inputSchema: {
+    type: "object",
+    properties: {
+      search_criteria: {
+        type: "object",
+        description: "Same as search_leads input",
+        properties: {
+          keywords: { type: "array", items: { type: "string" } },
+          location: { type: "string" },
+          job_title: { type: "string" },
+          company_size: { type: "string", enum: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"] },
+          industry: { type: "string" },
+          max_results: { type: "integer", minimum: 1, maximum: 200, default: 50 }
+        },
+        required: ["keywords"]
+      },
+      campaign_context: {
+        type: "object",
+        description: "Same as generate_email campaign_context",
+        properties: {
+          value_proposition: { type: "string" },
+          cta: { type: "string" },
+          product_description: { type: "string" },
+          sender_name: { type: "string" },
+          sender_company: { type: "string" },
+          tone: { type: "string", enum: ["professional", "casual", "direct", "warm"], default: "professional" }
+        },
+        required: ["value_proposition", "cta", "product_description", "sender_name", "sender_company"]
+      },
+      max_leads: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+      auto_send: { type: "boolean", default: false, description: "Actually send emails (demo mode = false)" }
+    },
+    required: ["search_criteria", "campaign_context"]
+  },
+
+  execute: async (input: {
+    search_criteria: { keywords: string[]; location?: string; job_title?: string; company_size?: string; industry?: string; max_results?: number },
+    campaign_context: { value_proposition: string; cta: string; product_description: string; sender_name: string; sender_company: string; tone: string },
+    max_leads?: number,
+    auto_send?: boolean
+  }): Promise<{ campaign_id: string; status: "running" | "completed" | "failed"; results: any }> => {
+    const campaignId = `campaign_${Date.now()}`
+    const startTime = Date.now()
+
+    try {
+      // Step 1: Search leads
+      const searchResult = await searchLeads.execute({
+        keywords: input.search_criteria.keywords,
+        location: input.search_criteria.location,
+        job_title: input.search_criteria.job_title,
+        company_size: input.search_criteria.company_size,
+        industry: input.search_criteria.industry,
+        max_results: input.max_leads || 20
+      })
+
+      const leads = searchResult.leads.slice(0, input.max_leads || 20)
+      let enriched = 0
+      let scored = 0
+      let emails_generated = 0
+      let emails_sent = 0
+      let sequences_created = 0
+      const processedLeads: any[] = []
+
+      // Process each lead
+      for (const lead of leads) {
+        // Step 2: Enrich lead
+        const enrichResult = await enrichLead.execute({
+          lead_id: lead.id,
+          include_company_scraping: true,
+          include_recent_posts: true,
+          include_tech_stack: true
+        })
+        enriched++
+
+        const dossier = enrichResult.dossier
+
+        // Step 3: Score lead
+        const scoreResult = await scoreLead.execute({
+          lead_id: lead.id,
+          dossier,
+          icp_criteria: {
+            company_size: input.search_criteria.company_size,
+            industry: input.search_criteria.industry,
+            min_revenue: 1000000,
+            relevant_tech: ['React', 'Node.js', 'AWS', 'TypeScript', 'Python']
+          },
+          scoring_model: "standard"
+        })
+        scored++
+
+        // Step 4: Generate email
+        const emailResult = await generateEmail.execute({
+          lead_id: lead.id,
+          dossier,
+          campaign_context: input.campaign_context,
+          email_type: "initial"
+        })
+        emails_generated++
+
+        // Step 5: Send email (if auto_send)
+        if (input.auto_send && dossier.person?.email) {
+          await sendEmail.execute({
+            to_email: dossier.person.email,
+            to_name: dossier.person.name,
+            subject: emailResult.subject,
+            body: emailResult.body,
+            from_email: "outreach@aiscale.pro",
+            from_name: "AIScale SDR",
+            tracking_enabled: true
+          })
+          emails_sent++
+        }
+
+        // Step 6: Create follow-up sequence
+        if (dossier.person?.email && dossier.person?.name) {
+          await createFollowUpSequence.execute({
+            lead_id: lead.id,
+            lead_email: dossier.person.email,
+            lead_name: dossier.person.name,
+            sequence_type: "standard_3_touch"
+          })
+          sequences_created++
+        }
+
+        processedLeads.push({
+          id: lead.id,
+          name: lead.name,
+          company: lead.company,
+          score: scoreResult.score,
+          tier: scoreResult.tier,
+          email_subject: emailResult.subject,
+          email_sent: input.auto_send,
+          sequence_created: true
+        })
+      }
+
+      console.log(`[WebMCP] Agent ran full campaign ${campaignId} → ${leads.length} leads processed`)
+
+      return {
+        campaign_id: campaignId,
+        status: "completed",
+        results: {
+          discovered: leads.length,
+          enriched,
+          scored,
+          emails_generated,
+          emails_sent,
+          sequences_created,
+          leads: processedLeads,
+          duration_ms: Date.now() - startTime
+        }
+      }
+    } catch (error: any) {
+      console.error(`[WebMCP] Campaign ${campaignId} failed:`, error)
+      return {
+        campaign_id: campaignId,
+        status: "failed",
+        results: { error: error.message }
+      }
+    }
+  }
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 type Lead = { id: string; name: string; headline: string; company: string; company_domain: string; location: string; linkedin_url: string; initial_score: number; tags: string[] }
@@ -418,13 +587,13 @@ async function getLeadById(id: string): Promise<Lead> {
 export function registerAllTools() {
   if (typeof document?.modelContext?.registerTool === 'function') {
     // WebMCP is enabled in browser
-    ;[searchLeads, enrichLead, scoreLead, generateEmail, sendEmail, createFollowUpSequence].forEach(tool => {
+    ;[searchLeads, enrichLead, scoreLead, generateEmail, sendEmail, createFollowUpSequence, runFullCampaign].forEach(tool => {
       document.modelContext!.registerTool(tool)
     })
-    console.log('[WebMCP] All 6 SDR orchestration tools registered!')
+    console.log('[WebMCP] All 7 SDR orchestration tools registered!')
   } else {
     console.log('[WebMCP] Running in standard browser - tools available via API/bridge')
   }
 }
 
-export const WEB_MCP_TOOLS = [searchLeads, enrichLead, scoreLead, generateEmail, sendEmail, createFollowUpSequence]
+export const WEB_MCP_TOOLS = [searchLeads, enrichLead, scoreLead, generateEmail, sendEmail, createFollowUpSequence, runFullCampaign]

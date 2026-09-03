@@ -63,6 +63,24 @@ export function WebMCPToolPanel() {
         description: 'Set up an automated follow-up sequence for a lead',
         inputSchema: { type: 'object', properties: { lead_id: { type: 'string' }, lead_email: { type: 'string' }, lead_name: { type: 'string' } } },
         execute: async (input: any) => ({ sequence_id: `seq_${Date.now()}`, steps_count: 3, next_followup_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() })
+      },
+      {
+        name: 'run_full_campaign',
+        description: 'Execute complete SDR campaign - orchestrates all steps in one call',
+        inputSchema: { type: 'object', properties: { search_criteria: { type: 'object' }, campaign_context: { type: 'object' }, max_leads: { type: 'integer' }, auto_send: { type: 'boolean' } } },
+        execute: async (input: any) => ({
+          campaign_id: `campaign_${Date.now()}`,
+          status: 'completed',
+          results: {
+            discovered: input.max_leads || 20,
+            enriched: input.max_leads || 20,
+            scored: input.max_leads || 20,
+            emails_generated: input.max_leads || 20,
+            emails_sent: 0,
+            sequences_created: input.max_leads || 20,
+            duration_ms: 5000
+          }
+        })
       }
     ]
 
