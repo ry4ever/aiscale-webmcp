@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:migrate": "node api/lib/migrate.cjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^0.9.4",
+    "@vercel/postgres": "^0.10.0",
     "lucide-react": "^0.474.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
