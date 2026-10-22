@@ -15,7 +15,7 @@ declare global {
   }
 
   interface Window {
-    webmcpTools: any[]
+    webmcpTools: any
   }
 }
 

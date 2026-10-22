@@ -597,3 +597,19 @@ export function registerAllTools() {
 }
 
 export const WEB_MCP_TOOLS = [searchLeads, enrichLead, scoreLead, generateEmail, sendEmail, createFollowUpSequence, runFullCampaign]
+// ============================================================================
+// PAGE BRIDGE - Expose tools on window so the dashboard UI can call them
+// ============================================================================
+export function installWebMCPTools() {
+  const tools = Object.assign([...WEB_MCP_TOOLS], {
+    searchLeads: searchLeads.execute,
+    enrichLead: enrichLead.execute,
+    scoreLead: scoreLead.execute,
+    generateEmail: generateEmail.execute,
+    sendEmail: sendEmail.execute,
+    createFollowUpSequence: createFollowUpSequence.execute,
+    run_full_campaign: runFullCampaign.execute,
+  })
+  window.webmcpTools = tools
+  registerAllTools()
+}
