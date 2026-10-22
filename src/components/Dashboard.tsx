@@ -15,6 +15,7 @@ export function Dashboard() {
   const [scores, setScores] = useState<{ leadId: string, score: number }[]>([])
   const [emails, setEmails] = useState<{ leadId: string, email: any }[]>([])
   const [campaign, setCampaign] = useState<{ searchCriteria: any, context: any, keywords?: string[], campaign_id?: string } | null>(null)
+  const [campaignResult, setCampaignResult] = useState<any>(null)
   const [activityLog, setActivityLog] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [lastRunTime, setLastRunTime] = useState<string>('Never')
@@ -142,6 +143,7 @@ export function Dashboard() {
   const handleStartCampaign = async (criteria: any) => {
     setIsLoading(true)
     setCampaign(criteria)
+    setCampaignResult(null)
 
     try {
       const result = await (window as any).webmcpTools.run_full_campaign({
@@ -157,7 +159,9 @@ export function Dashboard() {
         auto_send: false
       })
 
-      setToolCallHistory(prev => [...prev, { success: true, tool_name: 'run_full_campaign', duration_ms: result.duration_ms }])
+      setCampaign(prev => prev && { ...prev, campaign_id: result.campaign_id })
+      setCampaignResult(result.results)
+      setToolCallHistory(prev => [...prev, { success: result.status === 'completed', tool_name: 'run_full_campaign', duration_ms: result.results?.duration_ms, error: result.results?.error }])
     } catch (err: any) {
       logActivity(`run_full_campaign failed: ${err.message}`)
       setToolCallHistory(prev => [...prev, { success: false, tool_name: 'run_full_campaign', error: err.message }])
@@ -168,6 +172,16 @@ export function Dashboard() {
 
   return (
     <div>
+      {/* Start-here cue for first-time visitors */}
+      {!searchResults && campaign === null && toolCallHistory.length === 0 && (
+        <div className="flex items-start gap-3 p-4 mb-4 rounded-lg border border-primary/20 bg-primary/5 text-sm">
+          <span className="text-lg leading-none">👉</span>
+          <p className="text-gray-700">
+            <strong>Start here:</strong> click <strong>Search 20 Leads</strong> to have the agent pull a lead list, then hit <strong>Enrich</strong> on any lead to see the next tool in the pipeline.
+          </p>
+        </div>
+      )}
+
       {/* Quick Actions Header */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <button
@@ -186,7 +200,7 @@ export function Dashboard() {
             keywords: ['SaaS', 'Founder'],
             industry: 'SaaS',
             max_results: 20
-          })} className="flex-1 py-3 rounded-lg bg-primary/90 text-primary text-sm font-medium transition-colors hover:bg-primary">
+          })} className="flex-1 py-3 rounded-lg border border-primary bg-card text-primary text-sm font-medium transition-colors hover:bg-primary/5">
           🚀 Run Campaign
         </button>
       </div>
@@ -221,15 +235,33 @@ export function Dashboard() {
       )}
 
       {campaign !== null && campaign !== undefined && (
-        <div className="border rounded-lg p-6 mb-6 bg-card animate-pulse">
+        <div className={`border rounded-lg p-6 mb-6 bg-card ${campaignResult ? '' : 'animate-pulse'}`}>
           <h3 className="font-semibold mb-3">Campaign: {(campaign.keywords || ['Processing']).join(', ')}</h3>
-          <p className="text-sm text-gray-500 mb-4">Processing AI SDR workflow...</p>
-          <div className="grid grid-cols-3 gap-4">
+          <p className="text-sm text-gray-500 mb-4">
+            {campaignResult ? 'AI SDR workflow complete (drafts only, nothing sent).' : 'Processing AI SDR workflow...'}
+          </p>
+          {campaignResult && !campaignResult.error ? (
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                ['Discovered', campaignResult.discovered],
+                ['Enriched', campaignResult.enriched],
+                ['Scored', campaignResult.scored],
+                ['Emails drafted', campaignResult.emails_generated],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-2xl font-bold text-primary">{value}</div>
+                  <div className="text-xs text-gray-500">{label}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
             <div>
-              <div className="text-2xl font-bold text-primary">Processing...</div>
+              <div className={`text-2xl font-bold ${campaignResult?.error ? 'text-error' : 'text-primary'}`}>
+                {campaignResult?.error ? 'Failed' : 'Processing...'}
+              </div>
               <div className="text-xs text-gray-500">Campaign ID: {(campaign.campaign_id || 'run_pending')}</div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -253,7 +285,7 @@ export function Dashboard() {
       )}
 
       {/* Summary Stats */}
-      {searchResults || campaign && (
+      {searchResults && (
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="p-4 rounded bg-card border border-border">
             <div className="text-3xl font-bold text-primary">{dossiers.length}</div>
@@ -270,7 +302,7 @@ export function Dashboard() {
       <div className="border rounded-lg p-6 mb-6 bg-card">
         <h3 className="font-semibold mb-3">🤖 Human-Agent Collaboration</h3>
         <p className="text-sm text-gray-600 mb-3">
-          This demo showcases real WebMCP tools where an agent can orchestrate your entire AI SDR pipeline. The agent calls tools step-by-step, and you review/approve at each stage — then the agent proceeds automatically.
+          This demo registers working WebMCP tools that an agent can call to orchestrate an AI SDR pipeline. The tools run against sample data (no real leads are contacted). The agent calls tools step-by-step, and you review/approve at each stage — then the agent proceeds automatically.
         </p>
         <ul className="text-sm text-gray-600 space-y-1">
           <li>🔍 <strong>Agent</strong> searches for leads matching your criteria</li>

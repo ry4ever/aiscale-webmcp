@@ -33,6 +33,9 @@ export function App() {
               <div>
                 <h1 className="font-bold text-lg">AIScale.pro</h1>
                 <p className="text-xs text-gray-500">WebMCP SDR Demo</p>
+                <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-semibold uppercase tracking-wide">
+                  Demo data
+                </span>
               </div>
             )}
           </div>
