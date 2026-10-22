@@ -469,8 +469,8 @@ export const runFullCampaign = {
       let sequences_created = 0
       const processedLeads: any[] = []
 
-      // Process each lead
-      for (const lead of leads) {
+      // Process leads concurrently, like an agent batching tool calls
+      await Promise.all(leads.map(async (lead) => {
         // Step 2: Enrich lead
         const enrichResult = await enrichLead.execute({
           lead_id: lead.id,
@@ -540,7 +540,7 @@ export const runFullCampaign = {
           email_sent: input.auto_send,
           sequence_created: true
         })
-      }
+      }))
 
       console.log(`[WebMCP] Agent ran full campaign ${campaignId} → ${leads.length} leads processed`)
 
